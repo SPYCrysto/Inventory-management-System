@@ -29,4 +29,8 @@ export const supabase = createClient(supabaseUrl, supabaseKey, {
   },
 });
 
+// Never touch a real database while running the automated test suite.
+// Tests exercise the in-memory fallback store exclusively.
+export const DB_ENABLED = process.env.NODE_ENV !== "test";
+
 export default supabase;

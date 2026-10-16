@@ -139,7 +139,7 @@ export default function StockOperations() {
         </div>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1.2fr 0.8fr", gap: "24px" }}>
+      <div className="ops-layout">
         {/* Main Operation Form */}
         <Card title="Execute Inventory Movement">
           <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "18px" }}>
@@ -148,7 +148,7 @@ export default function StockOperations() {
               <label style={{ display: "block", marginBottom: "8px", fontSize: "13px", fontWeight: 600 }}>
                 Operation Type
               </label>
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: "8px" }}>
+              <div className="ops-type-switcher">
                 {[
                   { id: "in", label: "Stock In", color: "var(--accent-primary)" },
                   { id: "out", label: "Stock Out", color: "#f59e0b" },

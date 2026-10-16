@@ -1,4 +1,4 @@
-import { supabase } from "../supabase.js";
+import { supabase, DB_ENABLED } from "../supabase.js";
 import { generateId, Query } from "./storeHelper.js";
 
 let memoryMovements = [];
@@ -96,27 +96,31 @@ class MovementModel {
     return new Query(async () => {
       let items = [];
 
-      try {
-        const { data, error } = await supabase
-          .from("movements")
-          .select("*")
-          .order("created_at", { ascending: false });
+      if (DB_ENABLED) {
+        try {
+          const { data, error } = await supabase
+            .from("movements")
+            .select("*")
+            .order("created_at", { ascending: false });
 
-        if (!error && Array.isArray(data)) {
-          if (data.length > 0) {
-            items = data.map(rowToMovement);
-            memoryMovements = [...items];
-          } else if (memoryMovements.length > 0) {
-            items = [...memoryMovements];
-            if (process.env.NODE_ENV !== "test") {
-              const rows = items.map(movementToRow);
-              supabase.from("movements").upsert(rows, { onConflict: "id" }).then(() => {}).catch(() => {});
+          if (!error && Array.isArray(data)) {
+            if (data.length > 0) {
+              items = data.map(rowToMovement);
+              memoryMovements = [...items];
+            } else if (memoryMovements.length > 0) {
+              items = [...memoryMovements];
+              if (process.env.NODE_ENV !== "test") {
+                const rows = items.map(movementToRow);
+                supabase.from("movements").upsert(rows, { onConflict: "id" }).then(() => {}).catch(() => {});
+              }
             }
+          } else {
+            items = [...memoryMovements];
           }
-        } else {
+        } catch {
           items = [...memoryMovements];
         }
-      } catch {
+      } else {
         items = [...memoryMovements];
       }
 
@@ -160,9 +164,14 @@ class MovementModel {
 
     memoryMovements.unshift(item);
 
+    if (!DB_ENABLED) return item;
+
     try {
       const row = movementToRow(item);
-      await supabase.from("movements").insert([row]);
+      const { error } = await supabase.from("movements").insert([row]);
+      if (error) {
+        console.warn(`Supabase movements write failed (${error.code || "unknown"}): ${error.message}`);
+      }
     } catch {
       // Supabase table fallback
     }
@@ -183,15 +192,23 @@ class MovementModel {
     if (filter.productId) {
       const pIdStr = filter.productId.toString();
       memoryMovements = memoryMovements.filter((m) => m.productId !== pIdStr);
+      if (!DB_ENABLED) return { acknowledged: true };
       try {
-        await supabase.from("movements").delete().eq("product_id", pIdStr);
+        const { error } = await supabase.from("movements").delete().eq("product_id", pIdStr);
+        if (error) {
+          console.warn(`Supabase movements delete failed (${error.code || "unknown"}): ${error.message}`);
+        }
       } catch {
         // Fallback
       }
     } else {
       memoryMovements = [];
+      if (!DB_ENABLED) return { acknowledged: true };
       try {
-        await supabase.from("movements").delete().neq("id", "00000000-0000-0000-0000-000000000000");
+        const { error } = await supabase.from("movements").delete().neq("id", "00000000-0000-0000-0000-000000000000");
+        if (error) {
+          console.warn(`Supabase movements delete failed (${error.code || "unknown"}): ${error.message}`);
+        }
       } catch {
         // Fallback
       }

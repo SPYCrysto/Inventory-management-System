@@ -36,12 +36,13 @@ export const inventoryApi = {
   getAlerts: () => api.get("/alerts").then((r) => r.data),
 
   // Movements (Stock history)
-  getMovements: (limit = 50, type) =>
-    api
-      .get("/movements", {
-        params: { limit, ...(type ? { type } : {}) },
-      })
-      .then((r) => r.data),
+  getMovements: (limitOrParams = 50, type) => {
+    const params =
+      typeof limitOrParams === "object" && limitOrParams !== null
+        ? { limit: 50, ...limitOrParams }
+        : { limit: limitOrParams, ...(type ? { type } : {}) };
+    return api.get("/movements", { params }).then((r) => r.data);
+  },
 
   // Stats
   getStats: () => api.get("/stats").then((r) => r.data),

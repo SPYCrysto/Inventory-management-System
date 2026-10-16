@@ -68,8 +68,8 @@ export default function Dashboard() {
     }
     const total = stats.totalProducts;
     const out = stats.outOfStockCount || 0;
-    const low = Math.max(0, (stats.lowStockCount || 0) - out);
-    const inStock = Math.max(0, total - (stats.lowStockCount || 0));
+    const low = stats.lowStockCount || 0;
+    const inStock = Math.max(0, total - low - out);
 
     return {
       inStockCount: inStock,

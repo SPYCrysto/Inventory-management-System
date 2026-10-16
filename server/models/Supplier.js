@@ -1,4 +1,4 @@
-import { supabase } from "../supabase.js";
+import { supabase, DB_ENABLED } from "../supabase.js";
 import { generateId, Query } from "./storeHelper.js";
 
 let memorySuppliers = new Map();
@@ -41,19 +41,23 @@ class SupplierModel {
     return new Query(async () => {
       let items = [];
 
-      try {
-        const { data, error } = await supabase
-          .from("suppliers")
-          .select("*")
-          .order("name", { ascending: true });
+      if (DB_ENABLED) {
+        try {
+          const { data, error } = await supabase
+            .from("suppliers")
+            .select("*")
+            .order("name", { ascending: true });
 
-        if (!error && Array.isArray(data)) {
-          items = data.map(rowToSupplier);
-          items.forEach((s) => memorySuppliers.set(s._id, s));
-        } else {
+          if (!error && Array.isArray(data)) {
+            items = data.map(rowToSupplier);
+            items.forEach((s) => memorySuppliers.set(s._id, s));
+          } else {
+            items = Array.from(memorySuppliers.values());
+          }
+        } catch {
           items = Array.from(memorySuppliers.values());
         }
-      } catch {
+      } else {
         items = Array.from(memorySuppliers.values());
       }
 
@@ -72,18 +76,20 @@ class SupplierModel {
 
   static async findById(id) {
     if (!id) return null;
-    try {
-      const { data, error } = await supabase
-        .from("suppliers")
-        .select("*")
-        .eq("id", id)
-        .maybeSingle();
+    if (DB_ENABLED) {
+      try {
+        const { data, error } = await supabase
+          .from("suppliers")
+          .select("*")
+          .eq("id", id)
+          .maybeSingle();
 
-      if (!error && data) {
-        return rowToSupplier(data);
+        if (!error && data) {
+          return rowToSupplier(data);
+        }
+      } catch {
+        // Fallback
       }
-    } catch {
-      // Fallback
     }
     return memorySuppliers.get(id) || null;
   }
@@ -115,6 +121,8 @@ class SupplierModel {
     };
 
     memorySuppliers.set(id, supplier);
+
+    if (!DB_ENABLED) return supplier;
 
     try {
       const row = supplierToRow(supplier);
@@ -155,6 +163,7 @@ class SupplierModel {
     if (!s) return null;
 
     memorySuppliers.delete(id);
+    if (!DB_ENABLED) return s;
     try {
       await supabase.from("suppliers").delete().eq("id", id);
     } catch {
@@ -165,6 +174,7 @@ class SupplierModel {
 
   static async deleteMany(filter = {}) {
     memorySuppliers.clear();
+    if (!DB_ENABLED) return { acknowledged: true };
     try {
       await supabase.from("suppliers").delete().neq("id", "00000000-0000-0000-0000-000000000000");
     } catch {

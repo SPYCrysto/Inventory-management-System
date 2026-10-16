@@ -159,7 +159,8 @@ create table if not exists public.purchase_orders (
   organization_id uuid not null default '00000000-0000-0000-0000-000000000001' references public.organizations(id) on delete cascade,
   supplier_id uuid references public.suppliers(id) on delete set null,
   order_number text not null unique,
-  status text not null default 'draft' check (status in ('draft', 'ordered', 'partially_received', 'received', 'cancelled')),
+  type text not null default 'purchase' check (type in ('purchase', 'sales')),
+  status text not null default 'draft' check (status in ('draft', 'ordered', 'partially_received', 'received', 'fulfilled', 'cancelled')),
   party_name text not null default '',
   party_gstin text default '',
   subtotal numeric(12, 2) not null default 0,
@@ -170,6 +171,7 @@ create table if not exists public.purchase_orders (
   order_date timestamptz not null default now(),
   expected_date timestamptz,
   created_by uuid,
+  invoice_number text default '',
   items jsonb not null default '[]'::jsonb,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()

@@ -1788,7 +1788,7 @@ export default function Products() {
               value={scannerInput}
               onChange={(e) => setScannerInput(e.target.value)}
               autoFocus
-              style={{ flex: 1, margin: 0 }}
+              wrapperStyle={{ flex: 1, margin: 0 }}
             />
             <Button type="submit" variant="primary" icon={Icons.Check}>
               Scan

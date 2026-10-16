@@ -29,6 +29,10 @@ router.post("/", async (req, res) => {
       return res.status(400).json({ error: "Type, party name, and at least one item are required" });
     }
 
+    if (type !== "purchase" && type !== "sales") {
+      return res.status(400).json({ error: "Order type must be 'purchase' or 'sales'" });
+    }
+
     const orderNumber = `${type === "purchase" ? "PO" : "SO"}-${Date.now().toString().slice(-6)}`;
     const invoiceNumber = `INV-${new Date().getFullYear()}-${Date.now().toString().slice(-4)}`;
 
@@ -36,10 +40,17 @@ router.post("/", async (req, res) => {
     let gstTotal = 0;
 
     const processedItems = [];
+    const stockOps = [];
 
     for (const item of items) {
-      const qty = parseInt(item.quantity, 10) || 1;
+      const qty = parseInt(item.quantity, 10);
+      if (!Number.isFinite(qty) || qty <= 0) {
+        return res.status(400).json({ error: "Each item must have a positive quantity" });
+      }
       const unitPrice = parseFloat(item.unitPrice) || 0;
+      if (unitPrice < 0) {
+        return res.status(400).json({ error: "Unit price cannot be negative" });
+      }
       const gstRate = [0, 5, 12, 18, 28].includes(parseInt(item.gstRate, 10))
         ? parseInt(item.gstRate, 10)
         : 18;
@@ -60,23 +71,20 @@ router.post("/", async (req, res) => {
         itemTotal: Math.round((baseTotal + itemGst) * 100) / 100,
       });
 
-      // Update inventory stock based on order type!
+      // Validate stock availability before mutating anything
       if (item.productId) {
-        const delta = type === "purchase" ? qty : -qty;
         const product = await Product.findById(item.productId);
-        if (product) {
-          product.quantity = Math.max(0, product.quantity + delta);
-          await product.save();
-
-          await Movement.create({
-            productId: product._id,
-            productName: product.name,
-            sku: product.sku,
-            delta,
-            reason: `${type === "purchase" ? "Purchase Order Inward" : "Sales Order Outward"} (${orderNumber})`,
-            runningBalance: product.quantity,
+        if (!product) {
+          return res.status(400).json({ error: `Product not found for item '${item.productName || item.sku || ""}'` });
+        }
+        const delta = type === "purchase" ? qty : -qty;
+        const newQty = product.quantity + delta;
+        if (newQty < 0) {
+          return res.status(400).json({
+            error: `Insufficient stock for '${product.name}'. Available: ${product.quantity}, requested: ${qty}`,
           });
         }
+        stockOps.push({ product, delta, newQty });
       }
     }
 
@@ -96,6 +104,21 @@ router.post("/", async (req, res) => {
       invoiceNumber,
       notes: notes || "",
     });
+
+    // Update inventory only after the order record exists
+    for (const op of stockOps) {
+      op.product.quantity = op.newQty;
+      await op.product.save();
+
+      await Movement.create({
+        productId: op.product._id,
+        productName: op.product.name,
+        sku: op.product.sku,
+        delta: op.delta,
+        reason: `${type === "purchase" ? "Purchase Order Inward" : "Sales Order Outward"} (${orderNumber})`,
+        runningBalance: op.newQty,
+      });
+    }
 
     res.status(201).json(order);
   } catch (err) {

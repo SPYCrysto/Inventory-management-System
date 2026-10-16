@@ -20,7 +20,7 @@ export function ToastProvider({ children }) {
   }, []);
 
   return (
-    <ToastContext.Provider value={{ showToast }}>
+    <ToastContext.Provider value={{ showToast, toast: showToast }}>
       {children}
       <div className="toast-portal">
         {toasts.map((toast) => (

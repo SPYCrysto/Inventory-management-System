@@ -41,21 +41,8 @@ router.get("/", async (req, res) => {
     }
 
     // Filter by Status
-    if (status === "out_of_stock") {
-      query.quantity = { $lte: 0 };
-    } else if (status === "low_stock") {
-      query.$expr = {
-        $and: [
-          { $gt: ["$quantity", 0] },
-          { $lte: ["$quantity", "$lowStockThreshold"] },
-        ],
-      };
-    } else if (status === "in_stock") {
-      query.$expr = {
-        $gt: ["$quantity", "$lowStockThreshold"],
-      };
-    } else if (status === "damaged") {
-      query.status = "damaged";
+    if (["out_of_stock", "low_stock", "in_stock", "damaged"].includes(status)) {
+      query.status = status;
     }
 
     // Sorting
@@ -207,9 +194,21 @@ router.patch("/:id/transfer", async (req, res) => {
     const product = await Product.findById(req.params.id);
     if (!product) return res.status(404).json({ error: "Product not found" });
 
+    if (fromWarehouse && fromWarehouse !== product.warehouse) {
+      return res.status(400).json({
+        error: `Product is currently in ${product.warehouse}, not ${fromWarehouse}`,
+      });
+    }
+
     if (product.quantity < qty) {
       return res.status(400).json({
         error: `Insufficient stock in ${fromWarehouse || product.warehouse}. Available: ${product.quantity}, Requested: ${qty}`,
+      });
+    }
+
+    if (qty < product.quantity) {
+      return res.status(400).json({
+        error: `Only full-product transfers are supported. Requested ${qty} of ${product.quantity} units — transfer all units or adjust stock first.`,
       });
     }
 
@@ -483,7 +482,9 @@ router.post("/", async (req, res) => {
       expiryDate: expiryDate ? new Date(expiryDate) : null,
       serialNumber: serialNumber.trim(),
       barcode: barcode.trim() || sku.trim().toUpperCase(),
-      gstRate: parseInt(gstRate, 10) || 18,
+      gstRate: [0, 5, 12, 18, 28].includes(parseInt(gstRate, 10))
+        ? parseInt(gstRate, 10)
+        : 18,
       variants: Array.isArray(variants) ? variants : [],
     });
 
@@ -550,7 +551,9 @@ router.put("/:id", async (req, res) => {
         parseInt(req.body.lowStockThreshold, 10) || 0
       );
     if (req.body.gstRate !== undefined)
-      product.gstRate = parseInt(req.body.gstRate, 10) || 18;
+      product.gstRate = [0, 5, 12, 18, 28].includes(parseInt(req.body.gstRate, 10))
+        ? parseInt(req.body.gstRate, 10)
+        : 18;
     if (req.body.expiryDate !== undefined)
       product.expiryDate = req.body.expiryDate
         ? new Date(req.body.expiryDate)

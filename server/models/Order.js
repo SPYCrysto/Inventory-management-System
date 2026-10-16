@@ -1,21 +1,29 @@
-import { supabase } from "../supabase.js";
+import { supabase, DB_ENABLED } from "../supabase.js";
 import { generateId, Query } from "./storeHelper.js";
 
 let memoryOrders = new Map();
+
+const ORDERS_TABLE = "purchase_orders";
+
+function warnDbError(context, error) {
+  if (error) {
+    console.warn(`Supabase orders ${context} failed (${error.code || "unknown"}): ${error.message}`);
+  }
+}
 
 function orderToRow(o) {
   return {
     id: o.id || o._id || generateId(),
     order_number: o.orderNumber,
-    type: o.type,
+    type: o.type === "sales" ? "sales" : "purchase",
     party_name: o.partyName,
     party_gstin: o.partyGstin || "",
     items: o.items || [],
     subtotal: o.subtotal || 0,
-    gst_total: o.gstTotal || 0,
-    grand_total: o.grandTotal || 0,
+    tax_amount: o.gstTotal || 0,
+    total_amount: o.grandTotal || 0,
     warehouse: o.warehouse || "Main Hub (Bengaluru)",
-    status: o.status || "confirmed",
+    status: o.status || "draft",
     invoice_number: o.invoiceNumber || "",
     notes: o.notes || "",
   };
@@ -31,8 +39,8 @@ function rowToOrder(r) {
     partyGstin: r.party_gstin,
     items: Array.isArray(r.items) ? r.items : [],
     subtotal: typeof r.subtotal === "number" ? r.subtotal : parseFloat(r.subtotal) || 0,
-    gstTotal: typeof r.gst_total === "number" ? r.gst_total : parseFloat(r.gst_total) || 0,
-    grandTotal: typeof r.grand_total === "number" ? r.grand_total : parseFloat(r.grand_total) || 0,
+    gstTotal: typeof r.tax_amount === "number" ? r.tax_amount : parseFloat(r.tax_amount) || 0,
+    grandTotal: typeof r.total_amount === "number" ? r.total_amount : parseFloat(r.total_amount) || 0,
     warehouse: r.warehouse,
     status: r.status,
     invoiceNumber: r.invoice_number,
@@ -47,19 +55,26 @@ class OrderModel {
     return new Query(async () => {
       let items = [];
 
-      try {
-        const { data, error } = await supabase
-          .from("orders")
-          .select("*")
-          .order("created_at", { ascending: false });
+      if (DB_ENABLED) {
+        try {
+          const { data, error } = await supabase
+            .from(ORDERS_TABLE)
+            .select("*")
+            .order("created_at", { ascending: false });
 
-        if (!error && Array.isArray(data)) {
-          items = data.map(rowToOrder);
-          items.forEach((o) => memoryOrders.set(o._id, o));
-        } else {
+          if (error) {
+            warnDbError("read", error);
+            items = Array.from(memoryOrders.values());
+          } else if (Array.isArray(data)) {
+            items = data.map(rowToOrder);
+            items.forEach((o) => memoryOrders.set(o._id, o));
+          } else {
+            items = Array.from(memoryOrders.values());
+          }
+        } catch {
           items = Array.from(memoryOrders.values());
         }
-      } catch {
+      } else {
         items = Array.from(memoryOrders.values());
       }
 
@@ -81,18 +96,22 @@ class OrderModel {
 
   static async findById(id) {
     if (!id) return null;
-    try {
-      const { data, error } = await supabase
-        .from("orders")
-        .select("*")
-        .eq("id", id)
-        .maybeSingle();
+    if (DB_ENABLED) {
+      try {
+        const { data, error } = await supabase
+          .from(ORDERS_TABLE)
+          .select("*")
+          .eq("id", id)
+          .maybeSingle();
 
-      if (!error && data) {
-        return rowToOrder(data);
+        if (error) {
+          warnDbError("read", error);
+        } else if (data) {
+          return rowToOrder(data);
+        }
+      } catch {
+        // Fallback
       }
-    } catch {
-      // Fallback
     }
     return memoryOrders.get(id) || null;
   }
@@ -103,7 +122,7 @@ class OrderModel {
       _id: id,
       id,
       orderNumber: data.orderNumber,
-      type: data.type,
+      type: data.type === "sales" ? "sales" : "purchase",
       partyName: data.partyName,
       partyGstin: data.partyGstin || "",
       items: data.items || [],
@@ -111,7 +130,7 @@ class OrderModel {
       gstTotal: data.gstTotal || 0,
       grandTotal: data.grandTotal || 0,
       warehouse: data.warehouse || "Main Hub (Bengaluru)",
-      status: data.status || "confirmed",
+      status: data.status || "draft",
       invoiceNumber: data.invoiceNumber || "",
       notes: data.notes || "",
       createdAt: new Date(),
@@ -120,9 +139,12 @@ class OrderModel {
 
     memoryOrders.set(id, order);
 
+    if (!DB_ENABLED) return order;
+
     try {
       const row = orderToRow(order);
-      await supabase.from("orders").insert([row]);
+      const { error } = await supabase.from(ORDERS_TABLE).insert([row]);
+      warnDbError("write", error);
     } catch {
       // Fallback
     }
@@ -132,8 +154,10 @@ class OrderModel {
 
   static async deleteMany(filter = {}) {
     memoryOrders.clear();
+    if (!DB_ENABLED) return { acknowledged: true };
     try {
-      await supabase.from("orders").delete().neq("id", "00000000-0000-0000-0000-000000000000");
+      const { error } = await supabase.from(ORDERS_TABLE).delete().neq("id", "00000000-0000-0000-0000-000000000000");
+      warnDbError("delete", error);
     } catch {
       // Fallback
     }

@@ -1,4 +1,4 @@
-import { supabase } from "../supabase.js";
+import { supabase, DB_ENABLED } from "../supabase.js";
 import { productToRow, rowToProduct, generateId, Query } from "./storeHelper.js";
 
 // In-memory fallback cache (used when Supabase table has not been migrated yet)
@@ -265,7 +265,10 @@ class ProductDocument {
         ? Math.round(((this.price - (this.costPrice || 0)) / this.price) * 1000) / 10
         : 0;
 
-    memoryStore.set(this._id, { ...this });
+    const memoryKey = this._id;
+    memoryStore.set(memoryKey, { ...this });
+
+    if (!DB_ENABLED) return this;
 
     try {
       const row = productToRow(this);
@@ -275,9 +278,17 @@ class ProductDocument {
         .select()
         .single();
 
-      if (!error && data) {
+      if (error) {
+        console.warn(`Supabase products write failed (${error.code || "unknown"}): ${error.message}`);
+      } else if (data) {
         const mapped = rowToProduct(data);
         Object.assign(this, mapped);
+        if (mapped._id !== memoryKey) {
+          memoryStore.delete(memoryKey);
+          memoryStore.set(mapped._id, { ...this });
+        } else {
+          memoryStore.set(memoryKey, { ...this });
+        }
       }
     } catch {
       // Supabase table not present; memory store holds the state
@@ -320,27 +331,34 @@ class ProductModel {
     return new Query(async () => {
       let items = [];
 
-      try {
-        const { data, error } = await supabase
-          .from("products")
-          .select("*")
-          .order("created_at", { ascending: false });
+      if (DB_ENABLED) {
+        try {
+          const { data, error } = await supabase
+            .from("products")
+            .select("*")
+            .order("created_at", { ascending: false });
 
-        if (!error && Array.isArray(data)) {
-          if (data.length > 0) {
-            items = data.map(rowToProduct);
-            items.forEach((p) => memoryStore.set(p._id, p));
-          } else if (memoryStore.size > 0) {
+          if (error) {
+            console.warn(`Supabase products read failed (${error.code || "unknown"}): ${error.message}`);
             items = Array.from(memoryStore.values());
-            if (process.env.NODE_ENV !== "test") {
-              const rows = items.map(productToRow);
-              supabase.from("products").upsert(rows, { onConflict: "id" }).then(() => {}).catch(() => {});
+          } else if (Array.isArray(data)) {
+            if (data.length > 0) {
+              items = data.map(rowToProduct);
+              items.forEach((p) => memoryStore.set(p._id, p));
+            } else if (memoryStore.size > 0) {
+              items = Array.from(memoryStore.values());
+              if (process.env.NODE_ENV !== "test") {
+                const rows = items.map(productToRow);
+                supabase.from("products").upsert(rows, { onConflict: "id" }).then(() => {}).catch(() => {});
+              }
             }
+          } else {
+            items = Array.from(memoryStore.values());
           }
-        } else {
+        } catch {
           items = Array.from(memoryStore.values());
         }
-      } catch {
+      } else {
         items = Array.from(memoryStore.values());
       }
 
@@ -364,9 +382,6 @@ class ProductModel {
         }
         if (filter.status === "in_stock") {
           result = result.filter((p) => p.quantity > p.lowStockThreshold);
-        }
-        if (filter.$expr) {
-          result = result.filter((p) => p.quantity <= p.lowStockThreshold);
         }
         if (filter.$or && Array.isArray(filter.$or)) {
           result = result.filter((p) => {
@@ -402,20 +417,22 @@ class ProductModel {
 
   static async findById(id) {
     if (!id) return null;
-    try {
-      const { data, error } = await supabase
-        .from("products")
-        .select("*")
-        .eq("id", id)
-        .maybeSingle();
+    if (DB_ENABLED) {
+      try {
+        const { data, error } = await supabase
+          .from("products")
+          .select("*")
+          .eq("id", id)
+          .maybeSingle();
 
-      if (!error && data) {
-        const mapped = rowToProduct(data);
-        memoryStore.set(mapped._id, mapped);
-        return new ProductDocument(mapped);
+        if (!error && data) {
+          const mapped = rowToProduct(data);
+          memoryStore.set(mapped._id, mapped);
+          return new ProductDocument(mapped);
+        }
+      } catch {
+        // Supabase table query fallback
       }
-    } catch {
-      // Supabase table query fallback
     }
 
     const mem = memoryStore.get(id);
@@ -490,10 +507,12 @@ class ProductModel {
     if (!doc) return null;
 
     memoryStore.delete(id);
-    try {
-      await supabase.from("products").delete().eq("id", id);
-    } catch {
-      // Fallback
+    if (DB_ENABLED) {
+      try {
+        await supabase.from("products").delete().eq("id", id);
+      } catch {
+        // Fallback
+      }
     }
     return doc;
   }
@@ -501,8 +520,12 @@ class ProductModel {
   static async deleteMany(filter = {}) {
     if (Object.keys(filter).length === 0) {
       memoryStore.clear();
+      if (!DB_ENABLED) return { acknowledged: true };
       try {
-        await supabase.from("products").delete().neq("id", "00000000-0000-0000-0000-000000000000");
+        const { error } = await supabase.from("products").delete().neq("id", "00000000-0000-0000-0000-000000000000");
+        if (error) {
+          console.warn(`Supabase products delete failed (${error.code || "unknown"}): ${error.message}`);
+        }
       } catch {
         // Fallback
       }

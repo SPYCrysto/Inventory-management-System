@@ -27,8 +27,7 @@ router.get("/", async (req, res) => {
 
       if (qty === 0) {
         outOfStockCount++;
-      }
-      if (qty <= (p.lowStockThreshold || 10)) {
+      } else if (qty <= (p.lowStockThreshold || 10)) {
         lowStockCount++;
       }
 

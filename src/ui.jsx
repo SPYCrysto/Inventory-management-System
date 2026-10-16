@@ -271,13 +271,14 @@ export const Icons = {
   ),
 };
 
-export function Card({ children, className = "", onClick, ...props }) {
+export function Card({ children, className = "", onClick, title, ...props }) {
   return (
     <div
       onClick={onClick}
       className={`card ${className} ${onClick ? "clickable" : ""}`}
       {...props}
     >
+      {title && <div className="card-title">{title}</div>}
       {children}
     </div>
   );
@@ -335,9 +336,9 @@ export function Badge({ children, variant = "neutral", className = "", size = "m
   );
 }
 
-export function Input({ label, error, icon: Icon, className = "", ...props }) {
+export function Input({ label, error, icon: Icon, className = "", wrapperStyle, ...props }) {
   return (
-    <div className="form-group">
+    <div className="form-group" style={wrapperStyle}>
       {label && <label className="form-label">{label}</label>}
       <div className="input-wrapper">
         {Icon && <Icon className="input-icon" />}
@@ -353,7 +354,8 @@ export function Input({ label, error, icon: Icon, className = "", ...props }) {
   );
 }
 
-export function Select({ label, error, options = [], className = "", ...props }) {
+export function Select({ label, error, options, children, className = "", ...props }) {
+  const optionList = options || [];
   return (
     <div className="form-group">
       {label && <label className="form-label">{label}</label>}
@@ -361,11 +363,13 @@ export function Select({ label, error, options = [], className = "", ...props })
         className={`form-select ${error ? "is-invalid" : ""} ${className}`}
         {...props}
       >
-        {options.map((opt) => (
-          <option key={opt.value} value={opt.value}>
-            {opt.label}
-          </option>
-        ))}
+        {children
+          ? children
+          : optionList.map((opt) => (
+              <option key={opt.value} value={opt.value}>
+                {opt.label}
+              </option>
+            ))}
       </select>
       {error && <span className="form-error">{error}</span>}
     </div>
@@ -397,6 +401,7 @@ export function Modal({ isOpen, onClose, title, children, maxWidth = "540px" }) 
 export function ConfirmDialog({
   isOpen,
   onClose,
+  onCancel,
   onConfirm,
   title = "Are you sure?",
   message,
@@ -404,11 +409,12 @@ export function ConfirmDialog({
   confirmVariant = "danger",
   loading = false,
 }) {
+  const dismiss = onClose || onCancel;
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title={title} maxWidth="420px">
+    <Modal isOpen={isOpen} onClose={dismiss} title={title} maxWidth="420px">
       <p className="confirm-message">{message}</p>
       <div className="modal-actions">
-        <Button variant="ghost" onClick={onClose} disabled={loading}>
+        <Button variant="ghost" onClick={dismiss} disabled={loading}>
           Cancel
         </Button>
         <Button variant={confirmVariant} onClick={onConfirm} loading={loading}>
@@ -419,7 +425,9 @@ export function ConfirmDialog({
   );
 }
 
-export function EmptyState({ icon: Icon, title, description, action }) {
+export function EmptyState({ icon: Icon, title, description, action, actionLabel, onAction }) {
+  const actionNode =
+    action || (actionLabel && onAction ? <Button onClick={onAction}>{actionLabel}</Button> : null);
   return (
     <div className="empty-state">
       {Icon && (
@@ -429,7 +437,7 @@ export function EmptyState({ icon: Icon, title, description, action }) {
       )}
       <h3 className="empty-state-title">{title}</h3>
       {description && <p className="empty-state-description">{description}</p>}
-      {action && <div className="empty-state-action">{action}</div>}
+      {actionNode && <div className="empty-state-action">{actionNode}</div>}
     </div>
   );
 }

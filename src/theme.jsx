@@ -108,6 +108,7 @@ export function ThemeProvider({ children }) {
     root.style.setProperty("--accent-hover", active.hover);
     root.style.setProperty("--accent-rgb", active.rgb);
     root.style.setProperty("--accent-glow", active.glow);
+    root.style.setProperty("--accent-primary", active.color);
   }, [accent]);
 
   // Apply density
@@ -141,7 +142,13 @@ export function ThemeProvider({ children }) {
     setDensity("normal");
     setCurrency("USD");
     setDefaultThreshold(10);
-    localStorage.clear();
+    [
+      "inventra_theme",
+      "inventra_accent",
+      "inventra_density",
+      "inventra_currency",
+      "inventra_threshold",
+    ].forEach((key) => localStorage.removeItem(key));
   };
 
   return (

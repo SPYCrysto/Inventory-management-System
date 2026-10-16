@@ -147,13 +147,19 @@ create index if not exists idx_stock_movements_prod on public.stock_movements(pr
 create index if not exists idx_stock_movements_org on public.stock_movements(organization_id);
 create index if not exists idx_stock_movements_created on public.stock_movements(created_at desc);
 
+-- Legacy compatibility view for the movements API
+create or replace view public.movements as
+  select id, product_id, product_name, sku, delta, reason, new_quantity as running_balance, created_at
+  from public.stock_movements;
+
 -- 9. Purchase Orders
 create table if not exists public.purchase_orders (
   id uuid primary key default gen_random_uuid(),
   organization_id uuid not null default '00000000-0000-0000-0000-000000000001' references public.organizations(id) on delete cascade,
   supplier_id uuid references public.suppliers(id) on delete set null,
   order_number text not null unique,
-  status text not null default 'draft' check (status in ('draft', 'ordered', 'partially_received', 'received', 'cancelled')),
+  type text not null default 'purchase' check (type in ('purchase', 'sales')),
+  status text not null default 'draft' check (status in ('draft', 'ordered', 'partially_received', 'received', 'fulfilled', 'cancelled')),
   party_name text not null default '',
   party_gstin text default '',
   subtotal numeric(12, 2) not null default 0,
@@ -164,6 +170,7 @@ create table if not exists public.purchase_orders (
   order_date timestamptz not null default now(),
   expected_date timestamptz,
   created_by uuid,
+  invoice_number text default '',
   items jsonb not null default '[]'::jsonb,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()

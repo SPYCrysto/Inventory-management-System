@@ -52,6 +52,10 @@ export function AuthProvider({ children }) {
       if (session?.user) {
         setUser(session.user);
         await loadUserProfile(session.user);
+      } else if (_event === "SIGNED_OUT" || _event === "TOKEN_REFRESHED") {
+        setUser(null);
+        setProfile(null);
+        setRole("staff");
       }
     });
 
