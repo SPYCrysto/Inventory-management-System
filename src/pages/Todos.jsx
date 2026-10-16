@@ -125,11 +125,7 @@ export default function Todos() {
         <div>
           <h1 className="page-title">Supabase Cloud & Storage Center</h1>
           <p className="page-subtitle">
-            Diagnostics, PostgreSQL database queries, and Supabase Storage asset verification (
-            <code style={{ fontSize: "12px", background: "var(--bg-card)", padding: "2px 6px", borderRadius: "4px" }}>
-              hkzsfibpixlqeumakrld.supabase.co
-            </code>
-            )
+            Diagnostics, PostgreSQL database queries, and Supabase Storage asset verification
           </p>
         </div>
         <div style={{ display: "flex", gap: "8px" }}>

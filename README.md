@@ -32,8 +32,6 @@ src/                  React Vite Frontend
 supabase/             PostgreSQL migrations and schema
   schema.sql          Unified SQL DDL script for all 12 tables and RLS policies
   migrations/         Timestamped migration files
-scripts/
-  migrate-mongo-to-supabase.js  Data migration and reconciliation utility
 tests/
   api.test.js         Vitest integration test suite
 vercel.json           Serverless function rewrites and SPA fallback
@@ -109,24 +107,7 @@ npm run build
 
 ---
 
-## 5. Migrating from MongoDB
-
-If you have legacy records in MongoDB Atlas, run the automated migration utility:
-
-```bash
-MONGO_URI="mongodb+srv://<user>:<password>@cluster0.mongodb.net/inventra" node scripts/migrate-mongo-to-supabase.js
-```
-
-The script will:
-- Connect to MongoDB Atlas.
-- Extract products and stock movements.
-- Validate SKU uniqueness and reconcile inventory balances.
-- Upsert rows into your Supabase PostgreSQL database.
-- Output a verification count before finishing.
-
----
-
-## 6. Vercel Deployment
+## 5. Vercel Deployment
 
 1. Import the repository in [Vercel](https://vercel.com/new).
 2. Set Root Directory to `inventory-system`.

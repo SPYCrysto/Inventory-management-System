@@ -41,12 +41,9 @@ export function getDbStatus() {
   return isConnected ? "connected" : "connecting";
 }
 
-export async function disconnectFromMongoDB() {
-  // Legacy cleanup function - no-op for Supabase HTTP client
+export async function disconnect() {
   isConnected = false;
 }
-
-export const connectToMongoDB = connectDB;
 
 export { supabase };
 export default supabase;

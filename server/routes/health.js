@@ -12,7 +12,7 @@ router.get("/", async (req, res) => {
     backend: "express",
     database: dbStatus === "connected" ? "connected" : "online",
     provider: "Supabase Postgres",
-    projectUrl: process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || "https://hkzsfibpixlqeumakrld.supabase.co",
+    projectUrl: process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || "(not configured)",
     uptime: Math.floor(process.uptime()),
     timestamp: new Date().toISOString(),
     environment: process.env.NODE_ENV || "development",
